@@ -1,10 +1,14 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -57,5 +61,38 @@ func (s *ServerPool) HealthCheck() {
 	}
 }
 
+var serverPool *ServerPool
+
 func main() {
+	var serverList string
+	var port int
+	flag.StringVar(&serverList, "backends", "", "Load balanced backends, use commas to separate")
+	flag.IntVar(&port, "port", 3030, "Port to serve")
+	flag.Parse()
+
+	if len(serverList) == 0 {
+		log.Println("no backends provided, please provide one or more backends to load balance")
+		return
+	}
+
+	servers := strings.Split(serverList, ",")
+	for _, s := range servers {
+		serverURL, err := url.Parse(s)
+		if err != nil {
+			log.Fatal(err)
+		}
+		serverPool.Servers = append(serverPool.Servers, &Server{
+			URL:          *serverURL,
+			Alive:        true,
+			ReverseProxy: httputil.NewSingleHostReverseProxy(serverURL),
+		})
+	}
+
+	server := http.Server{
+		Addr: fmt.Sprintf(":%d", port),
+	}
+
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
