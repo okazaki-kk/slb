@@ -61,6 +61,33 @@ func (s *ServerPool) HealthCheck() {
 	}
 }
 
+func (s *ServerPool) GetNextAliveServer() *Server {
+	s.counter++
+	next := s.counter % uint64(len(s.Servers))
+	l := len(s.Servers) + int(next)
+
+	for i := int(next); i < l; i++ {
+		idx := i % len(s.Servers)
+		if s.Servers[idx].IsAlive() {
+			if i != int(next) {
+				s.counter = uint64(idx)
+			}
+			return s.Servers[idx]
+		}
+	}
+
+	return nil
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	server := serverPool.GetNextAliveServer()
+	if server != nil {
+		server.ReverseProxy.ServeHTTP(w, r)
+		return
+	}
+	http.Error(w, "No available backend", http.StatusServiceUnavailable)
+}
+
 var serverPool *ServerPool
 
 func main() {
@@ -89,7 +116,8 @@ func main() {
 	}
 
 	server := http.Server{
-		Addr: fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: http.HandlerFunc(handler),
 	}
 
 	if err := server.ListenAndServe(); err != nil {
