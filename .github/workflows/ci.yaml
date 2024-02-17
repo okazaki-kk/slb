@@ -27,6 +27,9 @@ jobs:
       - name: Fmt
         run: make fmt
 
+      - name: Test
+        run: make test
+
       - name: golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
