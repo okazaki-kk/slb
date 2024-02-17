@@ -17,6 +17,7 @@ type key int
 
 const (
 	retry key = iota
+	attempt
 )
 
 // Server holds information about a backend server
@@ -79,10 +80,17 @@ func (s *ServerPool) AddServer(server *Server) {
 }
 
 func loadbalance(w http.ResponseWriter, r *http.Request) {
+	attemptCount := getAttemptFromContext(r)
+	if attemptCount > 3 {
+		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	server := serverPool.GetNextAlive()
 	if server != nil {
 		// proxy request
 		server.ReverseProxy.ServeHTTP(w, r)
+		return
 	}
 	http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 }
@@ -106,7 +114,7 @@ func healthCheck() {
 	}
 }
 
-// GetRetryFromContext returns the number of retries from the request context
+// getRetryFromContext returns the number of retries from the request context
 func getRetryFromContext(r *http.Request) int {
 	if retry, ok := r.Context().Value(retry).(int); ok {
 		return retry
@@ -114,6 +122,13 @@ func getRetryFromContext(r *http.Request) int {
 	return 0
 }
 
+// getAttemptFromContext returns the number of attempts from the request context
+func getAttemptFromContext(r *http.Request) int {
+	if attempt, ok := r.Context().Value(attempt).(int); ok {
+		return attempt
+	}
+	return 1
+}
 
 var serverPool ServerPool
 
@@ -145,6 +160,10 @@ func main() {
 
 			// after 3 retries, mark this server as down
 			serverPool.SetServerStatus(serverURL, false)
+
+			attemptCount := getAttemptFromContext(r)
+			ctx := context.WithValue(r.Context(), attempt, attemptCount+1)
+			loadbalance(w, r.WithContext(ctx))
 		}
 
 		server := &Server{
