@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -89,6 +90,7 @@ func loadbalance(w http.ResponseWriter, r *http.Request) {
 	server := serverPool.GetNextAlive()
 	if server != nil {
 		// proxy request
+		log.Println(server.URL, "is being proxied")
 		server.ReverseProxy.ServeHTTP(w, r)
 		return
 	}
@@ -109,6 +111,7 @@ func healthCheck() {
 	for range t.C {
 		for _, s := range serverPool.servers {
 			alive := isServerAlive(s.URL)
+			log.Printf("Health check for server %s, alive: %v\n", s.URL, alive)
 			s.SetAlive(alive)
 		}
 	}
@@ -135,7 +138,7 @@ var serverPool ServerPool
 func main() {
 	var serverList string
 	var port int
-	flag.StringVar(&serverList, "backends", "http://localhost:8080,http://localhost:8081", "Load balanced backends")
+	flag.StringVar(&serverList, "servers", "http://localhost:8080,http://localhost:8081", "Load balanced backends")
 	flag.IntVar(&port, "port", 9090, "Port to serve on")
 	flag.Parse()
 
@@ -167,9 +170,11 @@ func main() {
 		}
 
 		server := &Server{
-			URL:   serverURL,
-			Alive: true,
+			URL:          serverURL,
+			Alive:        true,
+			ReverseProxy: proxy,
 		}
+		log.Printf("Add server %s\n", serverURL)
 		serverPool.AddServer(server)
 	}
 
@@ -179,6 +184,8 @@ func main() {
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: http.HandlerFunc(loadbalance),
 	}
+
+	log.Printf("Load Balancer started at :%d\n", port)
 
 	if err := server.ListenAndServe(); err != nil {
 		panic(err)
