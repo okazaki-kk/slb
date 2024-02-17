@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+type key int
+
+const (
+	retry key = iota
+)
+
 // Server holds information about a backend server
 type Server struct {
 	URL          *url.URL
@@ -102,7 +108,7 @@ func healthCheck() {
 
 // GetRetryFromContext returns the number of retries from the request context
 func getRetryFromContext(r *http.Request) int {
-	if retry, ok := r.Context().Value("retry").(int); ok {
+	if retry, ok := r.Context().Value(retry).(int); ok {
 		return retry
 	}
 	return 0
@@ -127,11 +133,11 @@ func main() {
 
 		proxy := httputil.NewSingleHostReverseProxy(serverURL)
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
-			retry := getRetryFromContext(r)
-			if retry < 3 {
+			retryCount := getRetryFromContext(r)
+			if retryCount < 3 {
 				select {
 				case <-time.After(1 * time.Second):
-					ctx := context.WithValue(r.Context(), "retry", retry+1)
+					ctx := context.WithValue(r.Context(), retry, retryCount+1)
 					proxy.ServeHTTP(w, r.WithContext(ctx))
 				}
 				return
