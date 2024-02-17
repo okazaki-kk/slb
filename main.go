@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -57,6 +58,15 @@ func (s *ServerPool) GetNextAlive() *Server {
 	return nil
 }
 
+func (s *ServerPool) SetServerStatus(url *url.URL, alive bool) {
+	for _, server := range s.servers {
+		if server.URL.String() == url.String() {
+			server.SetAlive(alive)
+			break
+		}
+	}
+}
+
 // AddServer adds a server to the server pool
 func (s *ServerPool) AddServer(server *Server) {
 	s.servers = append(s.servers, server)
@@ -90,6 +100,15 @@ func healthCheck() {
 	}
 }
 
+// GetRetryFromContext returns the number of retries from the request context
+func getRetryFromContext(r *http.Request) int {
+	if retry, ok := r.Context().Value("retry").(int); ok {
+		return retry
+	}
+	return 0
+}
+
+
 var serverPool ServerPool
 
 func main() {
@@ -107,7 +126,20 @@ func main() {
 		}
 
 		proxy := httputil.NewSingleHostReverseProxy(serverURL)
-		proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, e error) {}
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
+			retry := getRetryFromContext(r)
+			if retry < 3 {
+				select {
+				case <-time.After(1 * time.Second):
+					ctx := context.WithValue(r.Context(), "retry", retry+1)
+					proxy.ServeHTTP(w, r.WithContext(ctx))
+				}
+				return
+			}
+
+			// after 3 retries, mark this server as down
+			serverPool.SetServerStatus(serverURL, false)
+		}
 
 		server := &Server{
 			URL:   serverURL,
