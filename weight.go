@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"math/rand"
 	"net/http/httputil"
 	"net/url"
@@ -59,12 +60,29 @@ func (s *WeightedServerPool) Set(list []*WeightedServer) {
 	s.servers = sortedPool.servers
 }
 
+func (s *WeightedServerPool) Add(server *WeightedServer) {
+	s.servers = append(s.servers, server)
+	s.Set(s.servers)
+}
+
+func (s *WeightedServerPool) Remove(server *WeightedServer) error {
+	for i, v := range s.servers {
+		if v.URL.Host == server.URL.Host {
+			s.servers = append(s.servers[:i], s.servers[i+1:]...)
+			s.Set(s.servers)
+			return nil
+		}
+	}
+	return errors.New("server not found")
+}
+
 func New(list []*WeightedServer) *WeightedServerPool {
 	wsp := &WeightedServerPool{
-		servers: list,
+		servers: []*WeightedServer{},
 		Weight:  0,
 		Rand:    rand.New(rand.NewSource(0)),
 	}
 
+	wsp.Set(list)
 	return wsp
 }
