@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"net/url"
 	"testing"
 
@@ -116,7 +117,7 @@ func TestAdd(t *testing.T) {
 		tt := tt
 		wsp := New(tt.input.servers)
 		wsp.Add(tt.addServer)
-		assert.Equal(t, tt.outputWeight, wsp.Weight, tt.name)
+		assert.True(t, almostEqual(tt.outputWeight, wsp.Weight), tt.name)
 		assert.Equal(t, len(tt.input.servers)+1, len(wsp.servers), tt.name)
 	}
 }
@@ -229,4 +230,10 @@ func TestRemove(t *testing.T) {
 		assert.Equal(t, tt.outputWeight, wsp.Weight, tt.name)
 		assert.Equal(t, tt.outputLen, len(wsp.servers), tt.name)
 	}
+}
+
+const float64EqualityThreshold = 1e-9
+
+func almostEqual(a, b float64) bool {
+    return math.Abs(a - b) <= float64EqualityThreshold
 }
