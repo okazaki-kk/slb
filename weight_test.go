@@ -27,7 +27,7 @@ func TestSet(t *testing.T) {
 					Weight: 0.3,
 				},
 			}),
-			output: &WeightedServerPool{servers: []*WeightedServer{}, Weight: 0},
+			output: &WeightedServerPool{servers: []*WeightedServer{}, Weight: 0.3},
 		},
 	}
 
@@ -35,6 +35,7 @@ func TestSet(t *testing.T) {
 		tt := tt
 		wsp := &WeightedServerPool{}
 		wsp.Set(tt.input.servers)
-		assert.Equal(t, tt.output.Weight, wsp.Weight)
+		assert.Equal(t, tt.output.Weight, wsp.Weight, tt.name)
+		assert.Equal(t, len(tt.input.servers), len(wsp.servers), tt.name)
 	}
 }

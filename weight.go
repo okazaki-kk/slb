@@ -50,6 +50,13 @@ func (s *WeightedServerPool) Set(list []*WeightedServer) {
 		servers: list,
 	}
 	sort.Sort(&sortedPool)
+
+	weightSum := 0.0
+	for _, server := range list {
+		weightSum += server.Weight
+	}
+	s.Weight = weightSum
+	s.servers = sortedPool.servers
 }
 
 func New(list []*WeightedServer) *WeightedServerPool {
